@@ -3,11 +3,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox"; // Import Checkbox
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"; // Import AlertDialog components
-import { useToast } from "@/components/ui/use-toast"; // Using shadcn toast hook
-import { showSuccess, showError } from "@/utils/toast"; // Using sonner utility
-import { User, Users, Play, StopCircle, History, Trash2, ChevronDown, ChevronUp } from "lucide-react"; // Icons
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useToast } from "@/components/ui/use-toast";
+import { showSuccess, showError } from "@/utils/toast";
+import { User, Users, Play, StopCircle, History, Trash2, ChevronDown, ChevronUp, GripVertical } from "lucide-react"; // Added GripVertical icon
+
+// Import Dnd Kit components and hooks
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // Define types for clarity
 interface Client {
@@ -59,6 +77,60 @@ const formatTimestampToTime = (timestamp: number | null): string => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+// Sortable Item Component for Clients
+interface SortableClientItemProps {
+  client: Client;
+  index: number;
+  onNameChange: (id: string, name: string) => void;
+  onRemove: (id: string) => void;
+  isRemovable: boolean;
+}
+
+function SortableClientItem({ client, index, onNameChange, onRemove, isRemovable }: SortableClientItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: client.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center space-x-2 touch-action-none" // Added touch-action-none
+    >
+      <button {...listeners} {...attributes} className="cursor-grab text-gray-400 hover:text-white p-1">
+        <GripVertical size={18} />
+      </button>
+      <Label className="text-white">Cliente {index + 1}:</Label>
+      <Input
+        type="text"
+        placeholder={`Nome Cliente ${index + 1}`}
+        value={client.name}
+        onChange={(e) => onNameChange(client.id, e.target.value)}
+        className="flex-grow bg-[#3D3D3D] border border-gray-600 text-white placeholder-gray-400 rounded-md"
+      />
+      {isRemovable && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onRemove(client.id)}
+          className="text-gray-400 hover:text-red-500"
+        >
+          <Trash2 size={18} />
+        </Button>
+      )}
+    </div>
+  );
+}
+
 
 const DeliveryManager = () => {
   const { toast } = useToast(); // Shadcn toast for basic notifications (can be replaced by sonner if preferred)
@@ -90,6 +162,13 @@ const DeliveryManager = () => {
   const [showEndGiroConfirm, setShowEndGiroConfirm] = useState(false);
   const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
 
+  // Dnd Kit Sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // --- Effects ---
 
@@ -201,6 +280,21 @@ const DeliveryManager = () => {
   const handleResetClients = () => {
     setClients([{ id: Date.now().toString(), name: "" }]);
   };
+
+  // Dnd Kit Handler
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setClients((items) => {
+        const oldIndex = items.findIndex(item => item.id === active.id);
+        const newIndex = items.findIndex(item => item.id === over.id);
+
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  }
+
 
   // Giro Handlers
   const handleStartGiro = () => {
@@ -383,28 +477,29 @@ const DeliveryManager = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {clients.map((client, index) => (
-                <div key={client.id} className="flex items-center space-x-2">
-                  <Label className="text-white">Cliente {index + 1}:</Label>
-                  <Input
-                    type="text"
-                    placeholder={`Nome Cliente ${index + 1}`}
-                    value={client.name}
-                    onChange={(e) => handleClientNameChange(client.id, e.target.value)}
-                    className="flex-grow bg-[#3D3D3D] border border-gray-600 text-white placeholder-gray-400 rounded-md"
-                  />
-                  {clients.length > 1 && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleRemoveClient(client.id)}
-                      className="text-gray-400 hover:text-red-500"
-                    >
-                      <Trash2 size={18} />
-                    </Button>
-                  )}
-                </div>
-              ))}
+              {/* DndContext and SortableContext for drag and drop */}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={clients.map(client => client.id)}
+                  strategy={null} // Use default strategy
+                >
+                  {clients.map((client, index) => (
+                    <SortableClientItem
+                      key={client.id}
+                      client={client}
+                      index={index}
+                      onNameChange={handleClientNameChange}
+                      onRemove={handleRemoveClient}
+                      isRemovable={clients.length > 1}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+
               <div className="flex space-x-2 mt-4">
                 <Button onClick={handleAddClient} className="flex-grow bg-[#555555] hover:bg-[#6c757d] text-white rounded-md">
                   + Aggiungi Cliente
@@ -566,7 +661,7 @@ const DeliveryManager = () => {
 
       </div>
 
-       {/* Toaster components are already in App.tsx */}
+      {/* Toaster components are already in App.tsx */}
     </div>
   );
 };
