@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast"; // Using shadcn toast hook
 import { showSuccess, showError } from "@/utils/toast"; // Using sonner utility
-import { User, Users, Play, StopCircle, History, Trash2 } from "lucide-react"; // Icons
+import { User, Users, Play, StopCircle, History, Trash2, ChevronDown, ChevronUp } from "lucide-react"; // Icons
 
 // Define types for clarity
 interface Client {
@@ -20,6 +20,18 @@ interface GiroState {
   giroFattorino: string | null;
   giroClienti: string[];
 }
+
+interface GiroSummary {
+  id: number;
+  date: string;
+  fattorino: string | null;
+  duration: string;
+  numClients: number;
+  clients: string[];
+  startTime: string | null;
+  endTime: string;
+}
+
 
 // Helper function to format time
 const formatTime = (totalSeconds: number): string => {
@@ -55,7 +67,9 @@ const DeliveryManager = () => {
   const [elapsedTime, setElapsedTime] = useState<number>(0);
 
   // State for History (Optional V1)
-  const [history, setHistory] = useState<any[]>([]); // Define a proper type later
+  const [history, setHistory] = useState<GiroSummary[]>([]); // Using the defined type
+  const [expandedHistoryItem, setExpandedHistoryItem] = useState<number | null>(null); // State to track expanded item
+
 
   // --- Effects ---
 
@@ -209,7 +223,7 @@ const DeliveryManager = () => {
     window.open(waLink, '_blank');
 
     // Save to History (Optional V1)
-    const giroSummary = {
+    const giroSummary: GiroSummary = {
       id: Date.now(),
       date: new Date().toLocaleDateString(),
       fattorino: giroState.giroFattorino,
@@ -242,6 +256,11 @@ const DeliveryManager = () => {
       setHistory([]);
       showSuccess("Cronologia cancellata.");
     }
+  };
+
+  // Handler to toggle history item expansion
+  const handleToggleHistoryItem = (id: number) => {
+    setExpandedHistoryItem(expandedHistoryItem === id ? null : id);
   };
 
 
@@ -381,11 +400,26 @@ const DeliveryManager = () => {
              <CardContent className="space-y-3">
                <ul className="space-y-2 max-h-40 overflow-y-auto pr-2">
                  {history.map((giro) => (
-                   <li key={giro.id} className="border-b border-gray-600 pb-2 last:border-b-0">
-                     <p className="text-sm text-gray-300">{giro.date}</p>
-                     <p><strong>Fattorino:</strong> {giro.fattorino}</p>
-                     <p><strong>Durata:</strong> {giro.duration}</p>
-                     <p><strong>Clienti:</strong> {giro.numClients}</p>
+                   <li key={giro.id} className="border-b border-gray-600 pb-2 last:border-b-0 cursor-pointer" onClick={() => handleToggleHistoryItem(giro.id)}>
+                     <div className="flex justify-between items-center">
+                       <div>
+                         <p className="text-sm text-gray-300">{giro.date}</p>
+                         <p><strong>Fattorino:</strong> {giro.fattorino}</p>
+                         <p><strong>Durata:</strong> {giro.duration}</p>
+                         <p><strong>Clienti:</strong> {giro.numClients}</p> {/* This is now part of the clickable area */}
+                       </div>
+                       {expandedHistoryItem === giro.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                     </div>
+                     {expandedHistoryItem === giro.id && (
+                       <div className="mt-2 pl-4">
+                         <p className="font-semibold mb-1 text-gray-300">Nomi Clienti:</p>
+                         <ul className="list-disc list-inside text-gray-400">
+                           {giro.clients.map((client, index) => (
+                             <li key={index}>{client}</li>
+                           ))}
+                         </ul>
+                       </div>
+                     )}
                    </li>
                  ))}
                </ul>
