@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox"; // Import Checkbox
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"; // Import AlertDialog components
 import { useToast } from "@/components/ui/use-toast"; // Using shadcn toast hook
 import { showSuccess, showError } from "@/utils/toast"; // Using sonner utility
 import { User, Users, Play, StopCircle, History, Trash2, ChevronDown, ChevronUp } from "lucide-react"; // Icons
@@ -13,12 +15,18 @@ interface Client {
   name: string;
 }
 
+// Updated interface for clients in active giro
+interface ActiveGiroClient {
+  name: string;
+  deliveredTime: number | null; // Timestamp when delivered, null if not delivered
+}
+
 interface GiroState {
   giroAttivo: boolean;
   giroStartTime: number | null;
   giroOraPartenza: string | null;
   giroFattorino: string | null;
-  giroClienti: string[];
+  giroClienti: ActiveGiroClient[]; // Use updated type
 }
 
 interface GiroSummary {
@@ -27,7 +35,7 @@ interface GiroSummary {
   fattorino: string | null;
   duration: string;
   numClients: number;
-  clients: string[];
+  clients: ActiveGiroClient[]; // Use updated type
   startTime: string | null;
   endTime: string;
 }
@@ -44,6 +52,14 @@ const formatTime = (totalSeconds: number): string => {
   return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
 };
 
+// Helper function to format timestamp to HH:MM
+const formatTimestampToTime = (timestamp: number | null): string => {
+  if (timestamp === null) return '';
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+
 const DeliveryManager = () => {
   const { toast } = useToast(); // Shadcn toast for basic notifications (can be replaced by sonner if preferred)
 
@@ -51,7 +67,7 @@ const DeliveryManager = () => {
   const [fattorinoName, setFattorinoName] = useState<string>("");
   const [isEditingFattorino, setIsEditingFattorino] = useState<boolean>(true);
 
-  // State for Clients
+  // State for Clients (for input section)
   const [clients, setClients] = useState<Client[]>([{ id: Date.now().toString(), name: "" }]);
 
   // State for Giro
@@ -70,6 +86,10 @@ const DeliveryManager = () => {
   const [history, setHistory] = useState<GiroSummary[]>([]); // Using the defined type
   const [expandedHistoryItem, setExpandedHistoryItem] = useState<number | null>(null); // State to track expanded item
 
+  // State for Confirmation Dialogs
+  const [showEndGiroConfirm, setShowEndGiroConfirm] = useState(false);
+  const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
+
 
   // --- Effects ---
 
@@ -84,7 +104,16 @@ const DeliveryManager = () => {
     const savedGiroState = localStorage.getItem("giroState");
     if (savedGiroState) {
       const parsedState: GiroState = JSON.parse(savedGiroState);
-      setGiroState(parsedState);
+      // Ensure clients have the new structure if loading old data
+      const clientsWithDeliveredTime = parsedState.giroClienti.map(client => {
+         // Check if client is just a string (old format) or already an object
+         if (typeof client === 'string') {
+            return { name: client, deliveredTime: null };
+         }
+         return client; // Already in the new format
+      });
+      setGiroState({...parsedState, giroClienti: clientsWithDeliveredTime});
+
       if (parsedState.giroAttivo && parsedState.giroStartTime !== null) {
         // Calculate initial elapsed time based on saved start time
         const initialElapsedTime = Math.floor((Date.now() - parsedState.giroStartTime) / 1000);
@@ -94,7 +123,18 @@ const DeliveryManager = () => {
 
     const savedHistory = localStorage.getItem("giroHistory");
     if (savedHistory) {
-      setHistory(JSON.parse(savedHistory));
+      const parsedHistory: GiroSummary[] = JSON.parse(savedHistory);
+       // Ensure history clients have the new structure if loading old data
+       const historyWithDeliveredTime = parsedHistory.map(giro => ({
+          ...giro,
+          clients: giro.clients.map(client => {
+             if (typeof client === 'string') {
+                return { name: client, deliveredTime: null };
+             }
+             return client;
+          })
+       }));
+      setHistory(historyWithDeliveredTime);
     }
   }, []);
 
@@ -145,7 +185,7 @@ const DeliveryManager = () => {
     setIsEditingFattorino(true);
   };
 
-  // Client Handlers
+  // Client Input Handlers
   const handleAddClient = () => {
     setClients([...clients, { id: Date.now().toString(), name: "" }]);
   };
@@ -179,19 +219,26 @@ const DeliveryManager = () => {
     const startDate = new Date(startTime);
     const oraPartenzaFormattata = `${startDate.toLocaleDateString()} ${startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
+    // Map client names to the new ActiveGiroClient structure
+    const clientsForGiro: ActiveGiroClient[] = activeClients.map(name => ({
+      name: name,
+      deliveredTime: null, // Initialize deliveredTime to null
+    }));
+
+
     const newGiroState: GiroState = {
       giroAttivo: true,
       giroStartTime: startTime,
       giroOraPartenza: oraPartenzaFormattata,
       giroFattorino: fattorinoName.trim(),
-      giroClienti: activeClients,
+      giroClienti: clientsForGiro, // Use the new structure
     };
 
     setGiroState(newGiroState);
     setElapsedTime(0); // Reset timer display, it will start counting from 0 based on new startTime
 
     // Prepare and send WhatsApp message
-    const waMessage = `INIZIO GIRO CONSEGNE\n\nFattorino: ${newGiroState.giroFattorino}\nData e Ora Partenza: ${newGiroState.giroOraPartenza}\n\nClienti da servire:\n${newGiroState.giroClienti.map(c => `- ${c}`).join('\n')}`;
+    const waMessage = `INIZIO GIRO CONSEGNE\n\nFattorino: ${newGiroState.giroFattorino}\nData e Ora Partenza: ${newGiroState.giroOraPartenza}\n\nClienti da servire:\n${newGiroState.giroClienti.map(c => `- ${c.name}`).join('\n')}`; // Use c.name
     const encodedMessage = encodeURIComponent(waMessage);
     const waLink = `https://wa.me/393939393799?text=${encodedMessage}`;
 
@@ -200,7 +247,23 @@ const DeliveryManager = () => {
     showSuccess("Giro consegne iniziato!");
   };
 
-  const handleEndGiro = () => {
+  // Handler for marking a client as delivered
+  const handleMarkDelivered = (clientName: string) => {
+    setGiroState(prevState => {
+      const updatedClients = prevState.giroClienti.map(client => {
+        if (client.name === clientName && client.deliveredTime === null) {
+          showSuccess(`Cliente "${clientName}" segnato come consegnato alle ${formatTimestampToTime(Date.now())}`);
+          return { ...client, deliveredTime: Date.now() };
+        }
+        return client;
+      });
+      return { ...prevState, giroClienti: updatedClients };
+    });
+  };
+
+
+  // Function to perform the actual end giro logic
+  const performEndGiro = () => {
     if (giroState.giroStartTime === null) {
       showError("Errore: Nessun giro attivo da concludere.");
       return;
@@ -214,9 +277,15 @@ const DeliveryManager = () => {
     const endDate = new Date(endTime);
     const oraFineFormattata = `${endDate.toLocaleDateString()} ${endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
+    // Prepare client list for WhatsApp summary, including delivered times
+    const clientsSummary = giroState.giroClienti.map(client => {
+      const deliveredTime = client.deliveredTime ? ` (consegnato alle ${formatTimestampToTime(client.deliveredTime)})` : ' (non consegnato)';
+      return `- ${client.name}${deliveredTime}`;
+    }).join('\n');
+
 
     // Prepare and send WhatsApp summary message
-    const waMessage = `RIEPILOGO GIRO CONSEGNE\n\nFattorino: ${giroState.giroFattorino}\nData e Ora Partenza: ${giroState.giroOraPartenza}\nData e Ora Fine: ${oraFineFormattata}\nDurata Totale: ${durataTotaleFormattata}\n\nClienti serviti:\n${giroState.giroClienti.map(c => `- ${c}`).join('\n')}`;
+    const waMessage = `RIEPILOGO GIRO CONSEGNE\n\nFattorino: ${giroState.giroFattorino}\nData e Ora Partenza: ${giroState.giroOraPartenza}\nData e Ora Fine: ${oraFineFormattata}\nDurata Totale: ${durataTotaleFormattata}\n\nClienti serviti:\n${clientsSummary}`;
     const encodedMessage = encodeURIComponent(waMessage);
     const waLink = `https://wa.me/393939393799?text=${encodedMessage}`;
 
@@ -229,7 +298,7 @@ const DeliveryManager = () => {
       fattorino: giroState.giroFattorino,
       duration: durataTotaleFormattata,
       numClients: giroState.giroClienti.length,
-      clients: giroState.giroClienti, // Store client names for potential future use
+      clients: giroState.giroClienti, // Store client objects with deliveredTime
       startTime: giroState.giroOraPartenza,
       endTime: oraFineFormattata,
     };
@@ -251,12 +320,12 @@ const DeliveryManager = () => {
     showSuccess("Giro concluso con successo!");
   };
 
-  const handleClearHistory = () => {
-    if (confirm("Sei sicuro di voler cancellare tutta la cronologia dei giri?")) {
-      setHistory([]);
-      showSuccess("Cronologia cancellata.");
-    }
+  // Function to perform the actual clear history logic
+  const performClearHistory = () => {
+    setHistory([]);
+    showSuccess("Cronologia cancellata.");
   };
+
 
   // Handler to toggle history item expansion
   const handleToggleHistoryItem = (id: number) => {
@@ -351,17 +420,25 @@ const DeliveryManager = () => {
         )}
 
         {/* Pulsante Azione Principale */}
-        <Button
-          onClick={giroState.giroAttivo ? handleEndGiro : handleStartGiro}
-          className={`w-full text-white text-lg py-6 rounded-lg ${giroState.giroAttivo ? 'bg-[#dc3545] hover:bg-[#c82333]' : 'bg-[#28a745] hover:bg-[#218838]'}`}
-        >
-          {giroState.giroAttivo ? (
-            <StopCircle className="mr-2" size={24} />
-          ) : (
-            <Play className="mr-2" size={24} />
-          )}
-          {giroState.giroAttivo ? "Giro Concluso" : "Inizia Giro"}
-        </Button>
+        {giroState.giroAttivo ? (
+           // Use AlertDialogTrigger for End Giro button
+           <AlertDialogTrigger asChild>
+             <Button
+               onClick={() => setShowEndGiroConfirm(true)} // Set state to show dialog
+               className="w-full text-white text-lg py-6 rounded-lg bg-[#dc3545] hover:bg-[#c82333]"
+             >
+               <StopCircle className="mr-2" size={24} /> Giro Concluso
+             </Button>
+           </AlertDialogTrigger>
+        ) : (
+          <Button
+            onClick={handleStartGiro}
+            className="w-full text-white text-lg py-6 rounded-lg bg-[#28a745] hover:bg-[#218838]"
+          >
+            <Play className="mr-2" size={24} /> Inizia Giro
+          </Button>
+        )}
+
 
         {/* Sezione Giro Consegne Attivo (Visible only if giro IS active) */}
         {giroState.giroAttivo && (
@@ -379,9 +456,26 @@ const DeliveryManager = () => {
               <p><strong>Ora Partenza:</strong> {giroState.giroOraPartenza}</p>
               <div>
                 <p className="font-semibold mb-1">Clienti da servire:</p>
-                <ul className="list-disc list-inside max-h-40 overflow-y-auto pr-2">
+                <ul className="list-none space-y-2 max-h-40 overflow-y-auto pr-2"> {/* Changed to list-none for custom styling */}
                   {giroState.giroClienti.map((client, index) => (
-                    <li key={index} className="text-gray-300">{client}</li>
+                    <li key={index} className="flex items-center justify-between text-gray-300">
+                       <div className="flex items-center">
+                         <Checkbox
+                            id={`client-${index}`}
+                            checked={client.deliveredTime !== null}
+                            onCheckedChange={() => handleMarkDelivered(client.name)}
+                            className="mr-2 border-gray-500 data-[state=checked]:bg-[#28a745] data-[state=checked]:text-white"
+                         />
+                         <Label htmlFor={`client-${index}`} className={`text-gray-300 ${client.deliveredTime !== null ? 'line-through text-gray-500' : ''}`}>
+                           {client.name}
+                         </Label>
+                       </div>
+                       {client.deliveredTime !== null && (
+                          <span className="text-xs text-gray-400 ml-2">
+                             {formatTimestampToTime(client.deliveredTime)}
+                          </span>
+                       )}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -398,7 +492,7 @@ const DeliveryManager = () => {
                </CardTitle>
              </CardHeader>
              <CardContent className="space-y-3">
-               <ul className="space-y-2 max-h-40 overflow-y-auto pr-2">
+               <ul className="space-y-2 max-h-60 overflow-y-auto pr-2"> {/* Increased max-height */}
                  {history.map((giro) => (
                    <li key={giro.id} className="border-b border-gray-600 pb-2 last:border-b-0 cursor-pointer" onClick={() => handleToggleHistoryItem(giro.id)}>
                      <div className="flex justify-between items-center">
@@ -406,7 +500,10 @@ const DeliveryManager = () => {
                          <p className="text-sm text-gray-300">{giro.date}</p>
                          <p><strong>Fattorino:</strong> {giro.fattorino}</p>
                          <p><strong>Durata:</strong> {giro.duration}</p>
-                         <p><strong>Clienti:</strong> {giro.numClients}</p> {/* This is now part of the clickable area */}
+                         {/* Display Start and End Times */}
+                         {giro.startTime && <p className="text-sm text-gray-400">Partenza: {giro.startTime}</p>}
+                         {giro.endTime && <p className="text-sm text-gray-400">Fine: {giro.endTime}</p>}
+                         <p><strong>Clienti:</strong> {giro.numClients}</p>
                        </div>
                        {expandedHistoryItem === giro.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                      </div>
@@ -415,7 +512,12 @@ const DeliveryManager = () => {
                          <p className="font-semibold mb-1 text-gray-300">Nomi Clienti:</p>
                          <ul className="list-disc list-inside text-gray-400">
                            {giro.clients.map((client, index) => (
-                             <li key={index}>{client}</li>
+                             <li key={index}>
+                                {client.name}
+                                {client.deliveredTime !== null && (
+                                   <span className="text-xs ml-2">({formatTimestampToTime(client.deliveredTime)})</span>
+                                )}
+                             </li>
                            ))}
                          </ul>
                        </div>
@@ -423,15 +525,53 @@ const DeliveryManager = () => {
                    </li>
                  ))}
                </ul>
-               <Button onClick={handleClearHistory} className="w-full bg-gray-600 hover:bg-gray-700 text-white rounded-md mt-4">
-                 <Trash2 className="mr-2" size={18} /> Cancella Cronologia
-               </Button>
+               {/* Use AlertDialogTrigger for Clear History button */}
+               <AlertDialogTrigger asChild>
+                 <Button
+                   onClick={() => setShowClearHistoryConfirm(true)} // Set state to show dialog
+                   className="w-full bg-gray-600 hover:bg-gray-700 text-white rounded-md mt-4"
+                 >
+                   <Trash2 className="mr-2" size={18} /> Cancella Cronologia
+                 </Button>
+               </AlertDialogTrigger>
              </CardContent>
            </Card>
         )}
 
-
       </div>
+
+      {/* AlertDialog for End Giro Confirmation */}
+      <AlertDialog open={showEndGiroConfirm} onOpenChange={setShowEndGiroConfirm}>
+        <AlertDialogContent className="bg-[#4A4A4A] text-white border-none rounded-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Concludere il Giro?</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300">
+              Sei sicuro di voler concludere il giro attuale? Verrà inviato un riepilogo via WhatsApp.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-gray-600 hover:bg-gray-700 text-white border-none">Annulla</AlertDialogCancel>
+            <AlertDialogAction onClick={performEndGiro} className="bg-[#dc3545] hover:bg-[#c82333] text-white">Concludi Giro</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* AlertDialog for Clear History Confirmation */}
+      <AlertDialog open={showClearHistoryConfirm} onOpenChange={setShowClearHistoryConfirm}>
+        <AlertDialogContent className="bg-[#4A4A4A] text-white border-none rounded-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Cancellare Cronologia?</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300">
+              Questa azione cancellerà in modo permanente tutta la cronologia dei giri salvati. Sei sicuro?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-gray-600 hover:bg-gray-700 text-white border-none">Annulla</AlertDialogCancel>
+            <AlertDialogAction onClick={performClearHistory} className="bg-[#dc3545] hover:bg-[#c82333] text-white">Cancella Tutto</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
        {/* Toaster components are already in App.tsx */}
     </div>
   );
