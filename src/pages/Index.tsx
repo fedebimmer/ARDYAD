@@ -421,15 +421,28 @@ const DeliveryManager = () => {
 
         {/* Pulsante Azione Principale */}
         {giroState.giroAttivo ? (
-           // Use AlertDialogTrigger for End Giro button
-           <AlertDialogTrigger asChild>
-             <Button
-               onClick={() => setShowEndGiroConfirm(true)} // Set state to show dialog
-               className="w-full text-white text-lg py-6 rounded-lg bg-[#dc3545] hover:bg-[#c82333]"
-             >
-               <StopCircle className="mr-2" size={24} /> Giro Concluso
-             </Button>
-           </AlertDialogTrigger>
+           // Wrap the Trigger and Content within AlertDialog
+           <AlertDialog>
+             <AlertDialogTrigger asChild>
+               <Button
+                 className="w-full text-white text-lg py-6 rounded-lg bg-[#dc3545] hover:bg-[#c82333]"
+               >
+                 <StopCircle className="mr-2" size={24} /> Giro Concluso
+               </Button>
+             </AlertDialogTrigger>
+             <AlertDialogContent className="bg-[#4A4A4A] text-white border-none rounded-lg">
+               <AlertDialogHeader>
+                 <AlertDialogTitle className="text-white">Concludere il Giro?</AlertDialogTitle>
+                 <AlertDialogDescription className="text-gray-300">
+                   Sei sicuro di voler concludere il giro attuale? Verrà inviato un riepilogo via WhatsApp.
+                 </AlertDialogDescription>
+               </AlertDialogHeader>
+               <AlertDialogFooter>
+                 <AlertDialogCancel className="bg-gray-600 hover:bg-gray-700 text-white border-none">Annulla</AlertDialogCancel>
+                 <AlertDialogAction onClick={performEndGiro} className="bg-[#dc3545] hover:bg-[#c82333] text-white">Concludi Giro</AlertDialogAction>
+               </AlertDialogFooter>
+             </AlertDialogContent>
+           </AlertDialog>
         ) : (
           <Button
             onClick={handleStartGiro}
@@ -525,52 +538,33 @@ const DeliveryManager = () => {
                    </li>
                  ))}
                </ul>
-               {/* Use AlertDialogTrigger for Clear History button */}
-               <AlertDialogTrigger asChild>
-                 <Button
-                   onClick={() => setShowClearHistoryConfirm(true)} // Set state to show dialog
-                   className="w-full bg-gray-600 hover:bg-gray-700 text-white rounded-md mt-4"
-                 >
-                   <Trash2 className="mr-2" size={18} /> Cancella Cronologia
-                 </Button>
-               </AlertDialogTrigger>
+               {/* Wrap the Trigger and Content within AlertDialog */}
+               <AlertDialog>
+                 <AlertDialogTrigger asChild>
+                   <Button
+                     className="w-full bg-gray-600 hover:bg-gray-700 text-white rounded-md mt-4"
+                   >
+                     <Trash2 className="mr-2" size={18} /> Cancella Cronologia
+                   </Button>
+                 </AlertDialogTrigger>
+                 <AlertDialogContent className="bg-[#4A4A4A] text-white border-none rounded-lg">
+                   <AlertDialogHeader>
+                     <AlertDialogTitle className="text-white">Cancellare Cronologia?</AlertDialogTitle>
+                     <AlertDialogDescription className="text-gray-300">
+                       Questa azione cancellerà in modo permanente tutta la cronologia dei giri salvati. Sei sicuro?
+                     </AlertDialogDescription>
+                   </AlertDialogHeader>
+                   <AlertDialogFooter>
+                     <AlertDialogCancel className="bg-gray-600 hover:bg-gray-700 text-white border-none">Annulla</AlertDialogCancel>
+                     <AlertDialogAction onClick={performClearHistory} className="bg-[#dc3545] hover:bg-[#c82333] text-white">Cancella Tutto</AlertDialogAction>
+                   </AlertDialogFooter>
+                 </AlertDialogContent>
+               </AlertDialog>
              </CardContent>
            </Card>
         )}
 
       </div>
-
-      {/* AlertDialog for End Giro Confirmation */}
-      <AlertDialog open={showEndGiroConfirm} onOpenChange={setShowEndGiroConfirm}>
-        <AlertDialogContent className="bg-[#4A4A4A] text-white border-none rounded-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Concludere il Giro?</AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-300">
-              Sei sicuro di voler concludere il giro attuale? Verrà inviato un riepilogo via WhatsApp.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-gray-600 hover:bg-gray-700 text-white border-none">Annulla</AlertDialogCancel>
-            <AlertDialogAction onClick={performEndGiro} className="bg-[#dc3545] hover:bg-[#c82333] text-white">Concludi Giro</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* AlertDialog for Clear History Confirmation */}
-      <AlertDialog open={showClearHistoryConfirm} onOpenChange={setShowClearHistoryConfirm}>
-        <AlertDialogContent className="bg-[#4A4A4A] text-white border-none rounded-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Cancellare Cronologia?</AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-300">
-              Questa azione cancellerà in modo permanente tutta la cronologia dei giri salvati. Sei sicuro?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-gray-600 hover:bg-gray-700 text-white border-none">Annulla</AlertDialogCancel>
-            <AlertDialogAction onClick={performClearHistory} className="bg-[#dc3545] hover:bg-[#c82333] text-white">Cancella Tutto</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
        {/* Toaster components are already in App.tsx */}
     </div>
