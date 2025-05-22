@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { showSuccess, showError } from "@/utils/toast";
-import { User, Users, Play, StopCircle, History, Trash2, ChevronDown, ChevronUp, GripVertical } from "lucide-react"; // Added GripVertical icon
+import { User, Users, Play, StopCircle, History, Trash2, ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 
 // Import Dnd Kit components and hooks
 import {
@@ -24,6 +24,7 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
   arrayMove,
+  verticalListSortingStrategy, // Import the correct strategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -485,7 +486,7 @@ const DeliveryManager = () => {
               >
                 <SortableContext
                   items={clients.map(client => client.id)}
-                  strategy={null} // Use default strategy
+                  strategy={verticalListSortingStrategy} // Use the correct strategy
                 >
                   {clients.map((client, index) => (
                     <SortableClientItem
